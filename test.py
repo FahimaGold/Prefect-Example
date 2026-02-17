@@ -2,11 +2,20 @@ from prefect import flow, task
 import httpx
 
 
-@task(log_prints=True)
+@task(retries=3, retry_delay_seconds=60) # Prefect will now auto-retry if GitHub blocks you!
 def get_stars(repo: str):
     url = f"https://api.github.com/repos/{repo}"
-    count = httpx.get(url).json()["stargazers_count"]
+    response = httpx.get(url)
+    
+    # Check if the request actually worked
+    if response.status_code != 200:
+        print(f"Error from GitHub: {response.text}")
+        raise ValueError(f"GitHub returned {response.status_code}")
+        
+    data = response.json()
+    count = data.get("stargazers_count", 0) # .get() prevents the KeyError crash
     print(f"{repo} has {count} stars!")
+    return count
 
 
 @flow(name="GitHub Stars")
